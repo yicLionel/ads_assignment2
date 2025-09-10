@@ -62,3 +62,6 @@ struct queryResult *lookupPatriciaRecord(ptree_t *dict, char *query);
 /* Free a Patricia Trie dictionary. */
 void freePatriciaDict(ptree_t *dict);
 
+/* Print a single field of an a2_data record. */
+void printA2Field(FILE *f, a2_data *record, int fieldIndex);
+

@@ -55,9 +55,10 @@ struct csvRecord **readCSV(FILE *csvFile, int *n){
             spaceRecords = INIT_RECORDS;
         } else if(numRecords >= spaceRecords){
             spaceRecords *= 2;
-            records = (struct csvRecord **)
+            struct csvRecord **new_records = (struct csvRecord **)
                 realloc(records, sizeof(struct csvRecord *) * spaceRecords);
-            assert(records);
+            assert(new_records);
+            records = new_records;
         }
         /* If the line ends in an open double quote, we may need to extend the 
             line. */
@@ -75,9 +76,10 @@ struct csvRecord **readCSV(FILE *csvFile, int *n){
     }
 
     /* Shrink. */
-    records = (struct csvRecord **)
+    struct csvRecord **new_records = (struct csvRecord **)
                 realloc(records, sizeof(struct csvRecord *) * numRecords);
-    assert(records);
+    assert(new_records);
+    records = new_records;
 
     *n = numRecords;
     return records;
@@ -106,8 +108,9 @@ void checkLine(char **line, size_t *size, FILE *csvFile, char **line2, size_t *s
                 size_t line2Len = strlen(*line2);
                 if((lineLen + line2Len + 1) > *size){
                     /* line needs more space. */
-                    *line = (char *) realloc(*line, sizeof(char) * (lineLen + line2Len + 1));
-                    assert(*line);
+                    char *new_line = (char *) realloc(*line, sizeof(char) * (lineLen + line2Len + 1));
+                    assert(new_line);
+                    *line = new_line;
                 }
                 strcat(*line, *line2);
                 lineLen = strlen(*line);

@@ -8,6 +8,7 @@
 #include "bit.h"
 #include "patricia.h"
 #include "a2data.h"
+#include "editdist.h"
 #include "metrics.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -83,9 +84,11 @@ struct queryResult {
     int numRecords;
     double closestValue;
     struct data **records;
+    a2_data **a2_records;  // For Patricia Trie results
     int bitCount;
     int nodeCount;
     int stringCount;
+    int isPatriciaResult;  // Flag to indicate if this is from Patricia Trie
 };
 
 /* CSV records. */
@@ -368,6 +371,23 @@ void printDoubleField(FILE *f, double value, int fieldPrecision){
 /* Prints the relevant field. */
 void printField(FILE *f, struct data *record, int fieldIndex);
 
+/* Print a single field of an a2_data record. */
+void printA2Field(FILE *f, a2_data *record, int fieldIndex){
+    if(fieldIndex < 0 || fieldIndex >= A2_NUM_FIELDS){
+        fprintf(f, "INVALID_FIELD");
+        return;
+    }
+    
+    if(fieldIndex == 33 || fieldIndex == 34){
+        // Fields 33 and 34 are x,y coordinates - convert to double
+        double val = strtod(record->fields[fieldIndex], NULL);
+        printDoubleField(f, val, fieldPrecision[fieldIndex]);
+    } else {
+        // All other fields are strings
+        printStringField(f, record->fields[fieldIndex]);
+    }
+}
+
 void printField(FILE *f, struct data *record, int fieldIndex){
     switch(fieldIndex){
         case 0:
@@ -548,9 +568,10 @@ struct queryResult *lookupRecord(struct dictionary *dict, char *query){
             if(i == queryBitCount && i == nodeBitCount){
                 /* Match: 全字符相等，计终止符 8 位 */
                 bitCount += BITS_PER_BYTE;
-                records = (struct data **) realloc(records, 
+                struct data **new_records = (struct data **) realloc(records, 
                     sizeof(struct data *) * (numRecords + 1));
-                assert(records);
+                assert(new_records);
+                records = new_records;
                 records[numRecords] = current->record;
                 numRecords++;
                 break;
@@ -577,9 +598,11 @@ struct queryResult *lookupRecord(struct dictionary *dict, char *query){
     assert(qr->searchString);
     qr->numRecords = numRecords;
     qr->records = records;
+    qr->a2_records = NULL;
     qr->bitCount = bitCount;
     qr->nodeCount = nodeCount;
     qr->stringCount = stringCount;
+    qr->isPatriciaResult = 0;
     return qr;
 }
 
@@ -612,15 +635,23 @@ void printQueryResult(struct queryResult *r, FILE *summaryFile,
         exit(EXIT_FAILURE);
     }
     /* Print details. */
-    fprintf(outputFile, "%s\n", r->searchString);
-    for(int i = 0; i < r->numRecords; i++){
-        fprintf(outputFile, "--> ");
-        for(int j = 0; j < NUM_FIELDS; j++){
-            fprintf(outputFile, "%s: ", fieldNames[j]);
-            printField(outputFile, r->records[i], j);
-            fprintf(outputFile, " || ");
+    if(r->numRecords == 0){
+        fprintf(outputFile, "%s --> %s\n", r->searchString, NOTFOUND);
+    } else {
+        fprintf(outputFile, "%s\n", r->searchString);
+        for(int i = 0; i < r->numRecords; i++){
+            fprintf(outputFile, "--> ");
+            for(int j = 0; j < NUM_FIELDS; j++){
+                fprintf(outputFile, "%s: ", fieldNames[j]);
+                if(r->isPatriciaResult && r->a2_records){
+                    printA2Field(outputFile, r->a2_records[i], j);
+                } else {
+                    printField(outputFile, r->records[i], j);
+                }
+                fprintf(outputFile, " || ");
+            }
+            fprintf(outputFile, "\n");
         }
-        fprintf(outputFile, "\n");
     }
 }
 
@@ -645,9 +676,10 @@ struct index *buildDoubleIndex(struct dictionary *dict, int fieldIndex){
     while(current){
         if(valueCount == nodeSpace){
             nodeSpace *= 2;
-            nodes = (struct dictionaryNode **) realloc(nodes, 
+            struct dictionaryNode **new_nodes = (struct dictionaryNode **) realloc(nodes, 
                 sizeof(struct dictionaryNode *) * nodeSpace);
-            assert(nodes);
+            assert(new_nodes);
+            nodes = new_nodes;
         }
         nodes[valueCount] = current;
         for(int j = valueCount - 1; j >= 0; j--){
@@ -755,7 +787,9 @@ struct queryResult *searchClosestDouble(struct dictionary *dict, char *query,
     assert(qr->searchString);
     qr->numRecords = numRecords;
     qr->records = records;
+    qr->a2_records = NULL;
     qr->closestValue = closestValue;
+    qr->isPatriciaResult = 0;
     
     return qr;
 }
@@ -767,6 +801,7 @@ void freeQueryResult(struct queryResult *r){
         return;
     }
     free(r->records);
+    free(r->a2_records);
     free(r->searchString);
     free(r);
 }
@@ -931,9 +966,11 @@ struct queryResult *lookupPatriciaRecord(ptree_t *dict, char *query){
     result->searchString = strdup(query);
     result->numRecords = 0;
     result->records = NULL;
+    result->a2_records = NULL;
     result->bitCount = 0;
     result->nodeCount = 0;
     result->stringCount = 0;
+    result->isPatriciaResult = 1;
     
     /* Reset performance metrics for this query */
     metrics_reset();
@@ -952,13 +989,13 @@ struct queryResult *lookupPatriciaRecord(ptree_t *dict, char *query){
         }
         
         if(result->numRecords > 0){
-            result->records = (struct data**)malloc(sizeof(struct data*) * result->numRecords);
-            assert(result->records);
+            result->a2_records = (a2_data**)malloc(sizeof(a2_data*) * result->numRecords);
+            assert(result->a2_records);
             
             int i = 0;
             p = m->records;
             while(p){
-                result->records[i] = (struct data*)p->rec;
+                result->a2_records[i] = (a2_data*)p->rec;
                 i++;
                 p = p->next;
             }
@@ -968,24 +1005,33 @@ struct queryResult *lookupPatriciaRecord(ptree_t *dict, char *query){
         char *best_key = NULL;
         record_list_t *best = pt_search_similar_under(m, query, &best_key);
         
-        if(best){
-            /* Similar match found - count records and allocate array */
-            record_list_t *p = best;
-            while(p){
-                result->numRecords++;
-                p = p->next;
-            }
+        if(best && best_key){
+            /* Check if the edit distance is reasonable (not too large) */
+            int edit_dist = editDistance((char*)query, (char*)best_key, 
+                                       (int)strlen(query), (int)strlen(best_key));
             
-            if(result->numRecords > 0){
-                result->records = (struct data**)malloc(sizeof(struct data*) * result->numRecords);
-                assert(result->records);
-                
-                int i = 0;
-                p = best;
+            /* Only accept matches with edit distance <= 50% of query length */
+            int max_distance = (strlen(query) + 1) / 2;
+            
+            if(edit_dist <= max_distance){
+                /* Similar match found - count records and allocate array */
+                record_list_t *p = best;
                 while(p){
-                    result->records[i] = (struct data*)p->rec;
-                    i++;
+                    result->numRecords++;
                     p = p->next;
+                }
+                
+                if(result->numRecords > 0){
+                    result->a2_records = (a2_data**)malloc(sizeof(a2_data*) * result->numRecords);
+                    assert(result->a2_records);
+                    
+                    int i = 0;
+                    p = best;
+                    while(p){
+                        result->a2_records[i] = (a2_data*)p->rec;
+                        i++;
+                        p = p->next;
+                    }
                 }
             }
             free(best_key);

@@ -92,10 +92,11 @@ static void node_free(pt_node_t *n){
         node_free(n->children[i]);
     free(n->children);
     
-    // Free the record list (but not the records themselves)
+    // Free the record list and the records themselves
     record_list_t *p = n->records; 
     while(p){ 
         record_list_t *next = p->next; 
+        a2_free((a2_data*)p->rec);  // Free the a2_data structure
         free(p); 
         p = next; 
     }
@@ -123,8 +124,9 @@ void pt_free(ptree_t *t){
 /* Add a child node to a parent node */
 static void add_child(pt_node_t *parent, pt_node_t *child){
     // Expand the children array
-    parent->children = realloc(parent->children, sizeof(pt_node_t*) * (parent->child_count + 1));
-    assert(parent->children);
+    pt_node_t **new_children = realloc(parent->children, sizeof(pt_node_t*) * (parent->child_count + 1));
+    assert(new_children);
+    parent->children = new_children;
     // Add the new child and increment count
     parent->children[parent->child_count++] = child;
 }
@@ -140,16 +142,32 @@ static int find_candidate_child(pt_node_t *parent, const char *key){
 
 /* Calculate longest common prefix with bit-level metrics tracking */
 static int lcp_bits(const char *a, const char *b){
-    int i = 0; 
-    while(a[i] && b[i]){ 
-        if(a[i] != b[i]){ 
-            g_metrics.bitCount += 1ULL;  // Count first mismatch bit
-            break; 
-        } 
-        g_metrics.bitCount += 8ULL;  // Count 8 bits for each matching character
-        i++; 
+    int bit_pos = 0;
+    int char_pos = 0;
+    
+    // Compare bit by bit
+    while(a[char_pos] && b[char_pos]){
+        // Compare all 8 bits of current character
+        for(int bit = 0; bit < BITS_PER_BYTE; bit++){
+            int bit_a = getBit((char*)a, bit_pos + bit);
+            int bit_b = getBit((char*)b, bit_pos + bit);
+            
+            if(bit_a != bit_b){
+                g_metrics.bitCount += 1ULL;  // Count first mismatch bit
+                return char_pos;  // Return character position where mismatch occurs
+            }
+            g_metrics.bitCount += 1ULL;  // Count each matching bit
+        }
+        bit_pos += BITS_PER_BYTE;
+        char_pos++;
     }
-    return i;  // Return length of common prefix
+    
+    // Handle case where one string is shorter
+    if(a[char_pos] || b[char_pos]){
+        g_metrics.bitCount += 1ULL;  // Count first mismatch bit
+    }
+    
+    return char_pos;  // Return length of common prefix in characters
 }
 
 
@@ -172,10 +190,26 @@ void pt_insert(ptree_t *t, const char *key, struct data *rec){
         
         pt_node_t *child = cur->children[idx];
         
-        // Calculate longest common prefix (without bit counting for insertion)
+        // Calculate longest common prefix using bit-level comparison
         int lcp = 0;
         const char *lab = child->label; 
-        while(rest[lcp] && lab[lcp] && rest[lcp] == lab[lcp]) lcp++;
+        int bit_pos = 0;
+        
+        // Compare bit by bit to find common prefix
+        while(rest[lcp] && lab[lcp]){
+            bool match = true;
+            for(int bit = 0; bit < BITS_PER_BYTE; bit++){
+                int bit_rest = getBit((char*)rest, bit_pos + bit);
+                int bit_lab = getBit((char*)lab, bit_pos + bit);
+                if(bit_rest != bit_lab){
+                    match = false;
+                    break;
+                }
+            }
+            if(!match) break;
+            bit_pos += BITS_PER_BYTE;
+            lcp++;
+        }
         
         // Case 2: No common prefix - create new sibling
         if(lcp == 0){ 
@@ -239,7 +273,6 @@ pt_node_t* pt_search_with_mismatch(ptree_t *t, const char *key, bool *exact_term
     pt_node_t *cur = t->root; 
     const char *rest = key; 
     g_metrics.nodeCount = 0ULL;  // Initialize node count
-    unsigned int edge_count = 0;  // Count edges traversed
     
     while(1){
         g_metrics.nodeCount++;  // Count each node visit
@@ -248,7 +281,6 @@ pt_node_t* pt_search_with_mismatch(ptree_t *t, const char *key, bool *exact_term
         if(idx < 0) return cur;  // No matching child - mismatch at current node
         
         pt_node_t *child = cur->children[idx];
-        edge_count++;
         
         // Calculate common prefix with bit counting
         int lcp = lcp_bits(rest, child->label);
@@ -264,10 +296,6 @@ pt_node_t* pt_search_with_mismatch(ptree_t *t, const char *key, bool *exact_term
         if(*rest == '\0'){
             if(cur->is_terminal){
                 if(exact_terminal) *exact_terminal = true;
-                // Special node counting rule: add 1 more if traversed >= 2 edges
-                if(edge_count >= 2){
-                    g_metrics.nodeCount++;
-                }
             }
             return cur;
         }

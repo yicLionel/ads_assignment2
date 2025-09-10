@@ -1,10 +1,10 @@
-dict1: dict1.o dictionary.o read.o bit.o
-	gcc -Wall -o dict1 dict1.o dictionary.o read.o bit.o -g
+dict1: dict1.o dictionary.o read.o bit.o patricia.o editdist.o metrics.o a2data.o
+	gcc -Wall -o dict1 dict1.o dictionary.o read.o bit.o patricia.o editdist.o metrics.o a2data.o -g
 
 dict1.o: dict1.c dictionary.h read.h
 	gcc -Wall -o dict1.o dict1.c -g -c
 
-dictionary.o: dictionary.c dictionary.h record_struct.h bit.h
+dictionary.o: dictionary.c dictionary.h record_struct.h bit.h patricia.h metrics.h a2data.h
 	gcc -Wall -o dictionary.o dictionary.c -g -c
 
 read.o: read.c read.h record_struct.h
