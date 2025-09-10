@@ -1006,32 +1006,24 @@ struct queryResult *lookupPatriciaRecord(ptree_t *dict, char *query){
         record_list_t *best = pt_search_similar_under(m, query, &best_key);
         
         if(best && best_key){
-            /* Check if the edit distance is reasonable (not too large) */
-            int edit_dist = editDistance((char*)query, (char*)best_key, 
-                                       (int)strlen(query), (int)strlen(best_key));
+            /* Accept all similar matches found by the Patricia Trie */
+            /* Similar match found - count records and allocate array */
+            record_list_t *p = best;
+            while(p){
+                result->numRecords++;
+                p = p->next;
+            }
             
-            /* Only accept matches with edit distance <= 50% of query length */
-            int max_distance = (strlen(query) + 1) / 2;
-            
-            if(edit_dist <= max_distance){
-                /* Similar match found - count records and allocate array */
-                record_list_t *p = best;
-                while(p){
-                    result->numRecords++;
-                    p = p->next;
-                }
+            if(result->numRecords > 0){
+                result->a2_records = (a2_data**)malloc(sizeof(a2_data*) * result->numRecords);
+                assert(result->a2_records);
                 
-                if(result->numRecords > 0){
-                    result->a2_records = (a2_data**)malloc(sizeof(a2_data*) * result->numRecords);
-                    assert(result->a2_records);
-                    
-                    int i = 0;
-                    p = best;
-                    while(p){
-                        result->a2_records[i] = (a2_data*)p->rec;
-                        i++;
-                        p = p->next;
-                    }
+                int i = 0;
+                p = best;
+                while(p){
+                    result->a2_records[i] = (a2_data*)p->rec;
+                    i++;
+                    p = p->next;
                 }
             }
             free(best_key);

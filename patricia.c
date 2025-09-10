@@ -286,7 +286,7 @@ pt_node_t* pt_search_with_mismatch(ptree_t *t, const char *key, bool *exact_term
         int lcp = lcp_bits(rest, child->label);
         
         // Mismatch within the edge label
-        if(lcp < (int)strlen(child->label)) return cur;
+        if(lcp < (int)strlen(child->label)) return child;
         
         // Continue traversal
         rest += lcp; 
