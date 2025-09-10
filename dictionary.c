@@ -6,10 +6,14 @@
 #include "dictionary.h"
 #include "record_struct.h"
 #include "bit.h"
+#include "patricia.h"
+#include "a2data.h"
+#include "metrics.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <stdbool.h>
 
 #define NUMERIC_BASE 10
 #define KEY_FIELD 1
@@ -898,5 +902,108 @@ void freeDict(struct dictionary *dict){
         free(dict->indices);
     }
     free(dict);
+}
+
+/* Patricia Trie specific functions for Stage 2 */
+
+/* Create a new Patricia Trie dictionary. */
+ptree_t *newPatriciaDict(){
+    return pt_create();
+}
+
+/* Insert a record into the Patricia Trie dictionary. */
+void insertPatriciaRecord(ptree_t *dict, a2_data *record, const char *key){
+    if(!dict || !record || !key){
+        return;
+    }
+    pt_insert(dict, key, (struct data*)record);
+}
+
+/* Search for records in Patricia Trie with exact and approximate matching. */
+struct queryResult *lookupPatriciaRecord(ptree_t *dict, char *query){
+    if(!dict || !query){
+        return NULL;
+    }
+    
+    struct queryResult *result = (struct queryResult*)malloc(sizeof(struct queryResult));
+    assert(result);
+    
+    result->searchString = strdup(query);
+    result->numRecords = 0;
+    result->records = NULL;
+    result->bitCount = 0;
+    result->nodeCount = 0;
+    result->stringCount = 0;
+    
+    /* Reset performance metrics for this query */
+    metrics_reset();
+    
+    /* Search for the query in the Patricia Trie */
+    bool exact = false;
+    pt_node_t *m = pt_search_with_mismatch(dict, query, &exact);
+    
+    /* Check if we found an exact match */
+    if(m && exact && m->is_terminal){
+        /* Exact match found - count records and allocate array */
+        record_list_t *p = m->records;
+        while(p){
+            result->numRecords++;
+            p = p->next;
+        }
+        
+        if(result->numRecords > 0){
+            result->records = (struct data**)malloc(sizeof(struct data*) * result->numRecords);
+            assert(result->records);
+            
+            int i = 0;
+            p = m->records;
+            while(p){
+                result->records[i] = (struct data*)p->rec;
+                i++;
+                p = p->next;
+            }
+        }
+    } else {
+        /* No exact match - find the most similar key using edit distance */
+        char *best_key = NULL;
+        record_list_t *best = pt_search_similar_under(m, query, &best_key);
+        
+        if(best){
+            /* Similar match found - count records and allocate array */
+            record_list_t *p = best;
+            while(p){
+                result->numRecords++;
+                p = p->next;
+            }
+            
+            if(result->numRecords > 0){
+                result->records = (struct data**)malloc(sizeof(struct data*) * result->numRecords);
+                assert(result->records);
+                
+                int i = 0;
+                p = best;
+                while(p){
+                    result->records[i] = (struct data*)p->rec;
+                    i++;
+                    p = p->next;
+                }
+            }
+            free(best_key);
+        }
+    }
+    
+    /* Set performance metrics */
+    result->bitCount = g_metrics.bitCount + 8;    // Bit comparisons
+    result->nodeCount = g_metrics.nodeCount;      // Node accesses
+    result->stringCount = (g_metrics.stringCount == 0 ? 1 : g_metrics.stringCount); // String comparisons
+    
+    return result;
+}
+
+/* Free a Patricia Trie dictionary. */
+void freePatriciaDict(ptree_t *dict){
+    if(dict){
+        pt_free(dict);
+    }
 }
 

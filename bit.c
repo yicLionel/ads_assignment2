@@ -1,7 +1,6 @@
 #include "bit.h"
 #include <assert.h>
 
-/* Helper function. Gets the bit at bitIndex from the string s. */
 int getBit(char *s, unsigned int bitIndex){
     assert(s && bitIndex >= 0);
     unsigned int byte = bitIndex / BITS_PER_BYTE;

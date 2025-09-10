@@ -14,10 +14,10 @@ bit.o: bit.c bit.h
 	gcc -Wall -o bit.o bit.c -g -c
 
 # Stage 2 Patricia
-dict2: dict2.o patricia.o editdist.o metrics.o a2data.o read.o bit.o
-	gcc -Wall -o dict2 dict2.o patricia.o editdist.o metrics.o a2data.o read.o bit.o -g
+dict2: dict2.o patricia.o editdist.o metrics.o a2data.o read.o bit.o dictionary.o
+	gcc -Wall -o dict2 dict2.o patricia.o editdist.o metrics.o a2data.o read.o bit.o dictionary.o -g
 
-dict2.o: dict2.c patricia.h editdist.h metrics.h a2data.h read.h
+dict2.o: dict2.c patricia.h editdist.h metrics.h a2data.h read.h dictionary.h
 	gcc -Wall -o dict2.o dict2.c -g -c
 
 patricia.o: patricia.c patricia.h metrics.h a2data.h editdist.h bit.h

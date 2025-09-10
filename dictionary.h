@@ -4,6 +4,8 @@
     for particular values.
 */
 #include "record_struct.h"
+#include "patricia.h"
+#include "a2data.h"
 #include <stdio.h>
 
 #define LOOKUPSTAGE 1
@@ -45,4 +47,18 @@ void freeQueryResult(struct queryResult *r);
 
 /* Free a given dictionary. */
 void freeDict(struct dictionary *dict);
+
+/* Patricia Trie specific functions for Stage 2 */
+
+/* Create a new Patricia Trie dictionary. */
+ptree_t *newPatriciaDict();
+
+/* Insert a record into the Patricia Trie dictionary. */
+void insertPatriciaRecord(ptree_t *dict, a2_data *record, const char *key);
+
+/* Search for records in Patricia Trie with exact and approximate matching. */
+struct queryResult *lookupPatriciaRecord(ptree_t *dict, char *query);
+
+/* Free a Patricia Trie dictionary. */
+void freePatriciaDict(ptree_t *dict);
 
