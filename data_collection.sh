@@ -1,0 +1,166 @@
+#!/bin/bash
+
+echo "=== Data Collection for Complexity Analysis ==="
+echo
+
+# Create test data with varying characteristics
+echo "1. Creating test datasets with varying characteristics..."
+
+# Test with different prefix lengths
+echo "Testing prefix length impact:"
+for len in 1 2 3 5 10 15 20; do
+    echo "Prefix length: $len characters"
+    echo "18 PROFESSORS WALK" | cut -c1-$len | ./dict2 2 tests/dataset_22.csv temp_output.txt
+done
+echo
+
+# Test with different datasets
+echo "Testing dataset size impact:"
+echo "dataset_1.csv (1 record):"
+echo "18 PROFESSORS WALK" | ./dict2 2 tests/dataset_1.csv temp_output.txt
+
+echo "dataset_22.csv (20 records):"
+echo "18 PROFESSORS WALK" | ./dict2 2 tests/dataset_22.csv temp_output.txt
+
+echo "dataset_1067.csv (1067 records):"
+echo "18 PROFESSORS WALK" | ./dict2 2 tests/dataset_1067.csv temp_output.txt
+echo
+
+# Test with different key types
+echo "Testing key type impact:"
+echo "Exact match:"
+echo "18 PROFESSORS WALK PARKVILLE 3052" | ./dict2 2 tests/dataset_22.csv temp_output.txt
+
+echo "Similar match:"
+echo "18 PROFESSORS WALT" | ./dict2 2 tests/dataset_22.csv temp_output.txt
+
+echo "Prefix match:"
+echo "18 P" | ./dict2 2 tests/dataset_22.csv temp_output.txt
+
+echo "Non-existent key:"
+echo "NONEXISTENT_KEY_12345" | ./dict2 2 tests/dataset_22.csv temp_output.txt
+echo
+
+# Performance timing
+echo "Performance timing tests:"
+echo "Running 100 queries on dataset_1067.csv..."
+
+# Create a test file with 100 queries
+cat > perf_100_queries.txt << EOF
+18 PROFESSORS WALK
+230 GRATTAN STREET
+783 SWANSTON STREET
+151 BERKELEY STREET
+601/640 SWANSTON STREET
+225-235 BOUVERIE STREET
+18 SPENCER ROAD
+14 KERNOT
+161 BARRY
+23 PROFESSORS WALK
+18 PROFESSORS WALK
+230 GRATTAN STREET
+783 SWANSTON STREET
+151 BERKELEY STREET
+601/640 SWANSTON STREET
+225-235 BOUVERIE STREET
+18 SPENCER ROAD
+14 KERNOT
+161 BARRY
+23 PROFESSORS WALK
+18 PROFESSORS WALK
+230 GRATTAN STREET
+783 SWANSTON STREET
+151 BERKELEY STREET
+601/640 SWANSTON STREET
+225-235 BOUVERIE STREET
+18 SPENCER ROAD
+14 KERNOT
+161 BARRY
+23 PROFESSORS WALK
+18 PROFESSORS WALK
+230 GRATTAN STREET
+783 SWANSTON STREET
+151 BERKELEY STREET
+601/640 SWANSTON STREET
+225-235 BOUVERIE STREET
+18 SPENCER ROAD
+14 KERNOT
+161 BARRY
+23 PROFESSORS WALK
+18 PROFESSORS WALK
+230 GRATTAN STREET
+783 SWANSTON STREET
+151 BERKELEY STREET
+601/640 SWANSTON STREET
+225-235 BOUVERIE STREET
+18 SPENCER ROAD
+14 KERNOT
+161 BARRY
+23 PROFESSORS WALK
+18 PROFESSORS WALK
+230 GRATTAN STREET
+783 SWANSTON STREET
+151 BERKELEY STREET
+601/640 SWANSTON STREET
+225-235 BOUVERIE STREET
+18 SPENCER ROAD
+14 KERNOT
+161 BARRY
+23 PROFESSORS WALK
+18 PROFESSORS WALK
+230 GRATTAN STREET
+783 SWANSTON STREET
+151 BERKELEY STREET
+601/640 SWANSTON STREET
+225-235 BOUVERIE STREET
+18 SPENCER ROAD
+14 KERNOT
+161 BARRY
+23 PROFESSORS WALK
+18 PROFESSORS WALK
+230 GRATTAN STREET
+783 SWANSTON STREET
+151 BERKELEY STREET
+601/640 SWANSTON STREET
+225-235 BOUVERIE STREET
+18 SPENCER ROAD
+14 KERNOT
+161 BARRY
+23 PROFESSORS WALK
+18 PROFESSORS WALK
+230 GRATTAN STREET
+783 SWANSTON STREET
+151 BERKELEY STREET
+601/640 SWANSTON STREET
+225-235 BOUVERIE STREET
+18 SPENCER ROAD
+14 KERNOT
+161 BARRY
+23 PROFESSORS WALK
+18 PROFESSORS WALK
+230 GRATTAN STREET
+783 SWANSTON STREET
+151 BERKELEY STREET
+601/640 SWANSTON STREET
+225-235 BOUVERIE STREET
+18 SPENCER ROAD
+14 KERNOT
+161 BARRY
+23 PROFESSORS WALK
+18 PROFESSORS WALK
+230 GRATTAN STREET
+783 SWANSTON STREET
+151 BERKELEY STREET
+601/640 SWANSTON STREET
+225-235 BOUVERIE STREET
+18 SPENCER ROAD
+14 KERNOT
+161 BARRY
+23 PROFESSORS WALK
+EOF
+
+time ./dict2 2 tests/dataset_1067.csv perf_100_output.txt < perf_100_queries.txt
+
+echo
+echo "Data collection completed!"
+echo "Check the output files for detailed results."
